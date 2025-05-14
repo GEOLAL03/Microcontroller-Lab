@@ -1,0 +1,136 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#define del 10
+
+// Floor numbers
+#define floor0 0
+#define floor1 1
+#define floor2 2
+
+// The Switches
+#define shift_for_up PIN5_bm		// Up button on PF5
+#define shift_for_down PIN6_bm		// Down button on PF6
+
+// The LEDs
+#define error_led PIN0_bm			// Error LED on PD0
+#define first_floor_led PIN1_bm		// Floor indicator LED 1 on PD1
+#define second_floor_led PIN2_bm    // Floor indicator LED 2 on PD2
+#define movement_led PIN3_bm		// Up movement LED on PD3
+
+// States that the elevator goes to
+#define initial_state 0
+#define moving_up 1
+#define moving_down 2
+#define error_state 3
+
+// States that the elevator goes to
+int up_button = 0;
+int down_button = 0;
+int current_state = initial_state; // Setting current state as the initial state
+int current_floor = floor0;
+
+int main(void) {
+	// Configure pins
+	PORTD.DIR |= movement_led | error_led | first_floor_led | second_floor_led;   // Set LEDs as outputs
+	PORTD.OUT |= movement_led | error_led | first_floor_led | second_floor_led;   // LEDs are off and floor = 0 as the initial state
+
+	// Pull up enable and Interrupt enabled with sense on both edges 
+	PORTF.PIN5CTRL |= PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
+	PORTF.PIN6CTRL |= PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc; 
+
+	// Enable interrupts
+	sei();
+
+	while (1) {
+		if (current_state == initial_state) {
+			// No action is needed - no changes are being made
+		}
+		else if (current_state == moving_up | current_state == moving_down) {
+			// When the elevator is moving make the correct changes 
+			changing_states();
+		}
+		else if (current_state == error_state) {
+			// When the elevator is in error state call the correct function to handle it 
+			error_handling();
+		}
+	}
+}
+
+ISR(PORTF_PORT_vect) {
+	if (PORTF.INTFLAGS & shift_for_up) {
+		up_button = 1;
+		PORTF.INTFLAGS = shift_for_up; // Clear the interrupt flag
+	}
+	if (PORTF.INTFLAGS & shift_for_down) {
+		down_button = 1;
+		PORTF.INTFLAGS = shift_for_down; // Clear the interrupt flag
+	}
+
+	// Error condition - happens when both buttons are pressed
+	if (up_button && down_button) {
+		current_state = error_state;
+		up_button = 0;
+		down_button = 0;
+	}
+	// Case for when the up button is pressed
+	else if (up_button && current_floor < floor2) {
+		current_state = moving_up;
+		up_button = 0;
+	}
+	// Case for when button is pressed for floor further than second
+	else if (up_button && current_floor == floor2) {
+		up_button = 0;
+	}
+	// Case for when the down button is pressed
+	else if (down_button && current_floor > floor0) {
+		current_state = moving_down;
+		down_button = 0;
+	}
+	// Case for when button is pressed for floor lower than zero
+	else if (down_button && current_floor == floor0) {
+		down_button = 0;
+	}
+
+}
+
+void changing_states(void) {
+	if (current_state == moving_up) {
+		if (current_floor < floor2) {			
+			PORTD.OUTCLR = movement_led;		// Movement LED on - indicating upwards movement
+			_delay_ms(del);						// wait for 10ms
+			current_floor = current_floor + 1;
+			if (current_floor == floor1) {		// Turn one LED on - the first one
+				PORTD.OUTCLR = first_floor_led;	
+				PORTD.OUT |= second_floor_led;
+			}
+			else if (current_floor == floor2){	// Turn both LEDs on
+				PORTD.OUTCLR = first_floor_led;
+				PORTD.OUTCLR = second_floor_led;
+			}
+		}
+	}
+	else if (current_state == moving_down) {
+		if (current_floor > floor0) {
+			PORTD.OUT |= movement_led;			// Movement LED off - indicating downwards movement
+			_delay_ms(del);						// wait for 10ms 
+			current_floor = current_floor - 1;
+			if (current_floor == floor0) {		// Turn both LEDs off
+				PORTD.OUT |= first_floor_led;
+				PORTD.OUT |= second_floor_led;
+			}
+			else if (current_floor == floor1) {	// Turn one LED on - the first one
+				PORTD.OUTCLR = first_floor_led;
+				PORTD.OUT |= second_floor_led;
+			}
+		}
+	}
+	current_state = initial_state;
+}
+
+void error_handling(void) {
+	PORTD.OUTCLR = error_led;					// Turn on error LED
+	_delay_ms(del);								// Show error for 10 seconds
+	PORTD.OUT |= error_led;						// Turn off error LED
+	current_state = initial_state;				// Set state as initial state 
+}  
