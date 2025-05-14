@@ -1,7 +1,7 @@
 # Microcontroller-Lab
 This repository contains 5 different program simulations for ATmega4808 microcontroller ranging from traffic lights to a full greenhouse simulation.
 
-Project 1: Elevator Simulation Files: 
+Project 1: Elevator Simulation Files: elevator_code, elevator_report
 
 Project 2: Traffic Light Simulation Files:
 
